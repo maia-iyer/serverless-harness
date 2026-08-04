@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { contextServiceConfigured, createWorkload } from "../src/context-service.js";
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
@@ -29,6 +30,7 @@ describe("Context Service client", () => {
 
     expect(fetch.mock.calls[0][0]).toBe("http://context.example/v1/sandbox-pools");
     const init = fetch.mock.calls[0][1] as RequestInit;
+    expect(init.signal).toBeInstanceOf(AbortSignal);
     expect(JSON.parse(String(init.body))).toEqual({
       name: "demo",
       replicas: 3,
@@ -56,5 +58,19 @@ describe("Context Service client", () => {
       replicas: 4,
       workspace: { claimName: "mosaic", readOnly: true },
     });
+  });
+
+  it("aborts a Context Service request after the configured timeout", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("CONTEXT_SERVICE_URL", "http://context.example");
+    vi.stubEnv("CONTEXT_SERVICE_TIMEOUT_MS", "25");
+    vi.stubGlobal("fetch", vi.fn((_url: string, init?: RequestInit) => new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+    })));
+
+    const request = createWorkload("demo", {});
+    const rejected = expect(request).rejects.toMatchObject({ name: "AbortError" });
+    await vi.advanceTimersByTimeAsync(25);
+    await rejected;
   });
 });

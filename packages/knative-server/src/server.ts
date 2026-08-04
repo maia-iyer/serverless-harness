@@ -145,6 +145,11 @@ function requireContextService(res: ServerResponse): boolean {
   return false;
 }
 
+function contextServiceFailure(operation: string, err: unknown, res: ServerResponse): void {
+  console.error(`Context Service ${operation} failed:`, err);
+  res.writeHead(502, JSON_HEADERS).end(JSON.stringify({ error: "context_service_error" }));
+}
+
 async function resolveRunWorkload(body: any, res: ServerResponse): Promise<any | null> {
   if (!body?.workloadId) return body;
   const record = await findWorkload(body.workloadId);
@@ -170,7 +175,7 @@ async function handleCreateWorkload(req: IncomingMessage, res: ServerResponse): 
     await saveWorkload(record);
     res.writeHead(201, JSON_HEADERS).end(JSON.stringify(record));
   } catch (err) {
-    res.writeHead(502, JSON_HEADERS).end(JSON.stringify({ error: "context_service_error", message: String(err) }));
+    contextServiceFailure("create", err, res);
   }
 }
 
@@ -185,7 +190,7 @@ async function handleGetWorkload(id: string, res: ServerResponse): Promise<void>
     await saveWorkload(record);
     res.writeHead(200, JSON_HEADERS).end(JSON.stringify(record));
   } catch (err) {
-    res.writeHead(502, JSON_HEADERS).end(JSON.stringify({ error: "context_service_error", message: String(err) }));
+    contextServiceFailure("get", err, res);
   }
 }
 
@@ -201,7 +206,7 @@ async function handleDeleteWorkload(id: string, res: ServerResponse): Promise<vo
     await saveWorkload({ ...record, status: "deleted", readyReplicas: 0 });
     res.writeHead(204).end();
   } catch (err) {
-    res.writeHead(502, JSON_HEADERS).end(JSON.stringify({ error: "context_service_error", message: String(err) }));
+    contextServiceFailure("delete", err, res);
   }
 }
 

@@ -45,10 +45,18 @@ function baseUrl(): string {
 }
 
 async function request(path: string, init?: RequestInit): Promise<Response> {
-  const response = await fetch(`${baseUrl()}${path}`, init);
-  if (response.ok) return response;
-  const body = await response.json().catch(() => ({})) as { message?: string };
-  throw new Error(body.message ?? `Context Service returned ${response.status}`);
+  const configuredTimeout = Number.parseInt(process.env.CONTEXT_SERVICE_TIMEOUT_MS ?? "5000", 10);
+  const timeoutMs = Number.isFinite(configuredTimeout) && configuredTimeout > 0 ? configuredTimeout : 5000;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`${baseUrl()}${path}`, { ...init, signal: controller.signal });
+    if (response.ok) return response;
+    const body = await response.json().catch(() => ({})) as { message?: string };
+    throw new Error(body.message ?? `Context Service returned ${response.status}`);
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function workload(pool: ContextPool): WorkloadRecord {

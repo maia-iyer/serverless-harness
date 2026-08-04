@@ -101,6 +101,18 @@ describe("optional workload lifecycle", () => {
     expect(createWorkload).toHaveBeenCalledWith("demo-workload", expect.objectContaining({ sandboxes: 2 }));
   });
 
+  it("does not expose Context Service errors to callers", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    createWorkload.mockRejectedValueOnce(new Error("internal upstream detail"));
+
+    expect(await json("POST", "/workloads", { name: "demo-workload" })).toEqual({
+      status: 502,
+      body: { error: "context_service_error" },
+    });
+    expect(log).toHaveBeenCalledWith("Context Service create failed:", expect.any(Error));
+    log.mockRestore();
+  });
+
   it("routes a run through its workload pool", async () => {
     await json("POST", "/workloads", { name: "demo-workload" });
     runLeaf.mockResolvedValue({ status: "done", verdict: { item_id: "i", verdict: "CLEAR", reason: "ok" } });
